@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Web Notepad</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --header: #0f172a;
+      --accent: #38bdf8;
+      --muted: #64748b;
+    }
+    html,body { height:100%; margin:0; font-family: Inter, Arial, sans-serif; }
+    body { display:flex; flex-direction:column; background:var(--bg); }
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 12px; color:white; background:var(--header);
+    }
+    header h1 { margin:0; font-size:16px; }
+    .toolbar { display:flex; gap:8px; }
+    button {
+      appearance:none; border:0; background:var(--accent); color:#012; padding:8px 10px;
+      border-radius:6px; cursor:pointer; font-weight:600;
+    }
+    button:active { transform:translateY(1px); }
+    main { flex:1; display:flex; flex-direction:column; }
+    textarea {
+      flex:1; width:100%; resize:none; border:0; padding:16px; box-sizing:border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+      font-size:15px; line-height:1.45; outline:none;
+    }
+    footer { padding:6px 12px; font-size:13px; color:var(--muted); background:#f8fafc; text-align:right; }
+    @media (max-width:520px){ header h1{font-size:14px} button{padding:7px 8px;font-size:14px} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Web Notepad</h1>
+    <div class="toolbar">
+      <button id="btnNew" title="Ctrl+N">New</button>
+      <button id="btnOpen" title="Ctrl+O">Open</button>
+      <button id="btnSave" title="Ctrl+S">Save</button>
+    </div>
+  </header>
+
+  <main>
+    <textarea id="editor" placeholder="Start typing..."></textarea>
+  </main>
+
+  <footer id="status">Ln 1, Col 1</footer>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const editor = document.getElementById('editor');
+    const status = document.getElementById('status');
+    const btnNew = document.getElementById('btnNew');
+    const btnOpen = document.getElementById('btnOpen');
+    const btnSave = document.getElementById('btnSave');
+
+    // Restore autosaved content if present
+    const AUTOSAVE_KEY = 'web-notepad-autosave-v1';
+    const saved = localStorage.getItem(AUTOSAVE_KEY);
+    if (saved) {
+      try {
+        if (confirm('Restore previously saved content?')) {
+          editor.value = saved;
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function updateStatus() {
+      try {
+        const pos = editor.selectionStart ?? 0;
+        const before = editor.value.substring(0, pos);
+        const lines = before.split('\\n');
+        const row = lines.length;
+        const col = (lines[lines.length - 1] || '').length + 1;
+        status.textContent = `Ln ${row}, Col ${col}`;
+      } catch (e) {
+        console.error('Status update error:', e);
+        status.textContent = 'Ln -, Col -';
+      }
+    }
+
+    function newFile() {
+      if (editor.value.length && !confirm('Discard current text and start a new file?')) return;
+      editor.value = '';
+      updateStatus();
+      localStorage.removeItem(AUTOSAVE_KEY);
+    }
+
+    function saveFile() {
+      try {
+        const blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = 'notepad.txt';
+        // append needed for some browsers to allow click()
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // revoke URL after a tick
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        console.error('Save error:', err);
+        alert('Save failed. See console for details.');
+      }
+    }
+
+    function loadFile() {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.txt,text/plain,*.*';
+        input.addEventListener('change', (ev) => {
+          const file = ev.target.files && ev.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            editor.value = e.target.result;
+            updateStatus();
+            localStorage.setItem(AUTOSAVE_KEY, editor.value);
+          };
+          reader.onerror = (e) => {
+            console.error('Read error:', reader.error);
+            alert('Could not read file. See console for details.');
+          };
+          reader.readAsText(file, 'utf-8');
+        });
+        input.click();
+      } catch (err) {
+        console.error('Open error:', err);
+        alert('Open failed. See console for details.');
+      }
+    }
+
+    // Attach UI events
+    btnNew.addEventListener('click', newFile);
+    btnSave.addEventListener('click', saveFile);
+    btnOpen.addEventListener('click', loadFile);
+    editor.addEventListener('input', () => {
+      localStorage.setItem(AUTOSAVE_KEY, editor.value); // autosave
+      updateStatus();
+    });
+    editor.addEventListener('click', updateStatus);
+    editor.addEventListener('keyup', updateStatus);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveFile(); }
+      if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); loadFile(); }
+      if (mod && e.key.toLowerCase() === 'n') { e.preventDefault(); newFile(); }
+    });
+
+    updateStatus();
+  });
+  </script>
+</body>
+</html>
